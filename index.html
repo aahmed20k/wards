@@ -150,6 +150,7 @@ tr.merow td{background:var(--accent-soft)}
     <div class="controls">
       <label><input type="checkbox" id="f-fair" checked> Other person is not worse off</label>
       <label><input type="checkbox" id="f-better" checked> My block gets better</label>
+      <label><input type="checkbox" id="f-rule" checked> Keep 4 days off per 4-week block</label>
       <label><input type="checkbox" id="f-nights" checked> Never give me nights or UH ICU</label>
       <label><input type="checkbox" id="f-vac" checked> Leave vacations alone</label>
       <label><input type="checkbox" id="f-oneway" checked> Show one-block asks</label>
@@ -173,6 +174,7 @@ tr.merow td{background:var(--accent-soft)}
     <span><span class="dot gd"></span> good weekends (3 weekend days off)</span>
     <span><span class="dot bd"></span> has a black weekend</span>
     <span>Grey rotations (clinic, PDB, consults, electives) cannot be traded with you.</span>
+    <span>The 4-days-off check adds the A and B halves of the same block number. ICU and night blocks are not checked because their days off are not in the data.</span>
   </div>
 </section>
 </main>
@@ -243,6 +245,24 @@ function score(slot,i,forMe){
   if(forMe && (i===3||i===4)) v*=pref.ram;
   return v;
 }
+function offCount(slot,i){
+  if(slot.cat==='vac')return D.blocks[i].days;
+  if(slot.cat==='jep'||slot.cat==='oph')return wkinfo(slot,i).offDays;
+  if(slot.cat==='hell'){const ds=days(slot,i); return ds?ds.filter((l,d)=>l==='H'&&[0,4,5,6].includes(d%7)).length:null;}
+  const k=wkinfo(slot,i); if(k&&k.ds)return k.offDays;
+  return slot.cat==='x'?4:null;
+}
+function partner(i){const n=parseInt(D.blocks[i].id);return D.blocks.findIndex((b,j)=>j!==i&&parseInt(b.id)===n);}
+function pairOff(slots,i){const j=partner(i); if(j<0)return null; const a=offCount(slots[i],i), b=offCount(slots[j],j); return (a===null||b===null)?null:a+b;}
+function ruleBreaks(p,blocks){
+  const mine=mySlots(), theirs=D.blocks.map((b,i)=>slotOf(p,i)), out=[], seen={};
+  for(const i of blocks){const t=mine[i]; mine[i]=theirs[i]; theirs[i]=t;}
+  for(const i of blocks){const n=parseInt(D.blocks[i].id); if(seen[n])continue; seen[n]=1;
+    const a=pairOff(mine,i), b=pairOff(theirs,i);
+    if(a!==null&&a<4)out.push('you would have '+a+' days off in block '+n);
+    if(b!==null&&b<4)out.push(p.name.split(' ')[0]+' would have '+b+' days off in block '+n);}
+  return out;
+}
 const TRADE=['va','uhgm','uhsub','rat','hell','vamic','icu','nf','jep','vac'];
 function canDo(slot,taker,giver){ // can `taker` do a slot owned by `giver`
   if(TRADE.includes(slot.cat))return true;
@@ -287,6 +307,7 @@ function renderPlan(cur){
   cur.forEach(s=>{ if(['va','uhgm','uhsub','rat','hell','vamic','icu','nf'].includes(s.cat)){run++;maxRun=Math.max(maxRun,run);}else run=0; });
   const items=plan.map((t,n)=>'<div class="plan-item"><span><b>'+byKey[t.who].name+'</b>: '+t.blocks.map(i=>D.blocks[i].id+' '+range(i)+' you do <span class="mono">'+slotOf(byKey[t.who],i).code+'</span>, they do <span class="mono">'+ME.rot[i]+'</span>').join('; ')+'. Arrange by '+md(deadline(Math.min(...t.blocks)))+'.</span><button data-rm="'+n+'">Remove</button></div>').join('');
   box.innerHTML='<h2 style="margin-top:16px">Your plan</h2>'+items
+    +(function(){const b=[],seen={};cur.forEach((s,i)=>{const n=parseInt(D.blocks[i].id);if(seen[n])return;seen[n]=1;const v=pairOff(cur,i);if(v!==null&&v<4)b.push('block '+n+' has '+v+' days off');});return b.length?'<p class="warn" style="margin-top:8px">This plan breaks the 4-days-off rule: '+b.join('; ')+'.</p>':'';})()
     +(maxRun>=5?'<p class="warn" style="margin-top:8px">This plan gives you '+maxRun+' inpatient half-blocks in a row ('+(maxRun*2)+' weeks). The chiefs asked to be told about long ward stretches.</p>':'')
     +'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button id="copyplan">Copy plan as text</button><button id="clearplan">Clear plan</button><span class="note" id="copymsg"></span></div>';
 }
@@ -296,7 +317,7 @@ function planText(){
 
 function findTrades(){
   const f=id=>document.getElementById(id);
-  const fair=f('f-fair').checked, better=f('f-better').checked, noN=f('f-nights').checked, noV=f('f-vac').checked, oneway=f('f-oneway').checked;
+  const rule=f('f-rule').checked, fair=f('f-fair').checked, better=f('f-better').checked, noN=f('f-nights').checked, noV=f('f-vac').checked, oneway=f('f-oneway').checked;
   const who=f('f-who').value, nm=f('f-name').value.trim().toLowerCase(), sort=f('f-sort').value;
   const used=usedBlocks(); const out=[];
   const mine=slotOf(ME,sel), mv=score(mine,sel,true), mvp=score(mine,sel,false);
@@ -309,7 +330,7 @@ function findTrades(){
     if(noV&&(a.cat==='vac'||mine.cat==='vac'))continue;
     const av=score(a,sel,true), avp=score(a,sel,false); const selGain=av-mv;
     if(better&&selGain<=0.001)continue;
-    if(oneway){const their=mvp-avp; if(!fair||their>=-0.3) out.push({p,blocks:[sel],selGain,mine:selGain,their});}
+    if(oneway){const their=mvp-avp; const br=ruleBreaks(p,[sel]); if((!fair||their>=-0.3)&&!(rule&&br.length)) out.push({p,blocks:[sel],selGain,mine:selGain,their,br});}
     for(let t=0;t<D.blocks.length;t++){
       if(t===sel||locked(t)||used.has(t))continue;
       const mt=slotOf(ME,t), b=slotOf(p,t);
@@ -320,7 +341,8 @@ function findTrades(){
       const myG=selGain+score(b,t,true)-score(mt,t,true);
       const their=(mvp-avp)+(score(mt,t,false)-score(b,t,false));
       if(fair&&their<-0.3)continue;
-      out.push({p,blocks:[sel,t],selGain,mine:myG,their});
+      const br=ruleBreaks(p,[sel,t]); if(rule&&br.length)continue;
+      out.push({p,blocks:[sel,t],selGain,mine:myG,their,br});
     }
   }
   const key={sel:x=>[-x.selGain,-x.mine],me:x=>[-x.mine,-x.selGain],them:x=>[-x.their,-x.selGain]}[sort];
@@ -357,7 +379,7 @@ function renderCards(){
     return '<article class="card"><div class="head"><div class="meta"><span class="who">'+p.name+'</span><span class="tag">'+role+'</span></div>'
       +'<div class="meta">'+verdict(t.mine,false)+verdict(t.their,true)+'<span class="tag">arrange by '+md(deadline(Math.min(...t.blocks)))+'</span>'
       +'<button class="primary" data-add="'+n+'">Add to plan</button></div></div>'
-      +'<div class="rows">'+rows+'</div>'+(notes.length?'<p class="note">'+notes.join(' ')+'</p>':'')+'</article>';
+      +'<div class="rows">'+rows+'</div>'+(t.br&&t.br.length?'<p class="warn">Breaks the 4-days-off rule: '+t.br.join('; ')+'.</p>':'')+(notes.length?'<p class="note">'+notes.join(' ')+'</p>':'')+'</article>';
   }).join('');
   box.innerHTML='<p class="note">'+all.length+' possible trades. Showing '+Math.min(shown,all.length)+'.</p>'+html+(all.length>shown?'<button id="more">Show more</button>':'');
   box._all=all;
