@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Intern Swap Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: schedule strip on top (pick a block), trade cards below, reference grid last. */
+:root{
+  --bg:#f3f4f1; --panel:#ffffff; --ink:#172026; --muted:#5d6a70; --line:#d5dad6;
+  --accent:#0b6b62; --accent-ink:#ffffff; --accent-soft:#dcefeb;
+  --gold:#e3a81c; --gold-ink:#3b2a00; --silver:#aab4ba; --silver-ink:#1c2428; --black:#23272b; --black-ink:#ffffff;
+  --va:#b4532a; --hell:#a3243b; --uh:#2d5f9a; --icu:#6a3f96; --nf:#3b3f6b; --light:#3c7d3f; --fixed:#8a9398;
+  --good:#1f7a3d; --bad:#b3261e; --warn-bg:#fff3cd; --warn-ink:#5c4400;
+  --display:"IBM Plex Sans Condensed","Arial Narrow",sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#12171a; --panel:#1b2226; --ink:#e8ecea; --muted:#9aa7ac; --line:#313b40;
+    --accent:#4fc3b4; --accent-ink:#06211e; --accent-soft:#17332f;
+    --gold:#e9b63a; --gold-ink:#2a1e00; --silver:#7d8a91; --silver-ink:#0f1417; --black:#000000; --black-ink:#ffffff;
+    --va:#e08a62; --hell:#e8667c; --uh:#7fb0ea; --icu:#b892e0; --nf:#9aa0e0; --light:#7fc582; --fixed:#7d878c;
+    --good:#6fcf8c; --bad:#ff8a80; --warn-bg:#3d3211; --warn-ink:#f3dc93;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#12171a; --panel:#1b2226; --ink:#e8ecea; --muted:#9aa7ac; --line:#313b40;
+  --accent:#4fc3b4; --accent-ink:#06211e; --accent-soft:#17332f;
+  --gold:#e9b63a; --gold-ink:#2a1e00; --silver:#7d8a91; --silver-ink:#0f1417; --black:#000000; --black-ink:#ffffff;
+  --va:#e08a62; --hell:#e8667c; --uh:#7fb0ea; --icu:#b892e0; --nf:#9aa0e0; --light:#7fc582; --fixed:#7d878c;
+  --good:#6fcf8c; --bad:#ff8a80; --warn-bg:#3d3211; --warn-ink:#f3dc93;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45}
+main{max-width:1180px;margin:0 auto;padding:20px 16px 60px;display:flex;flex-direction:column;gap:22px}
+h1{font-family:var(--display);font-size:30px;margin:0;letter-spacing:.01em;text-wrap:balance}
+h2{font-family:var(--display);font-size:20px;margin:0 0 10px;text-wrap:balance}
+p{margin:0}
+.sub{color:var(--muted);max-width:70ch;margin-top:4px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}
+button{font:inherit;cursor:pointer;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:6px 10px}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:500}
+button:disabled{opacity:.45;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input,select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+input[type=number]{width:64px}
+label{display:inline-flex;align-items:center;gap:6px}
+.mono{font-family:var(--mono)}
+/* schedule strip */
+.strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.blk{text-align:left;padding:8px 9px;border-radius:8px;border:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;gap:4px;min-height:118px;border-left-width:5px}
+.blk.sel{outline:3px solid var(--accent);outline-offset:1px}
+.blk.locked{opacity:.55}
+.blk .top{display:flex;justify-content:space-between;gap:6px;font-size:12px;color:var(--muted)}
+.blk .rot{font-family:var(--mono);font-weight:500;font-size:15px}
+.blk .was{font-size:12px;color:var(--muted);text-decoration:line-through}
+.tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:10px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.tag.ram{border-color:var(--accent);color:var(--accent)}
+.tag.chg{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.c-va{border-left-color:var(--va)} .c-hell{border-left-color:var(--hell)} .c-uhgm,.c-uhsub{border-left-color:var(--uh)} .c-rat{border-left-color:var(--hell)} .c-vamic{border-left-color:var(--icu)}
+.c-icu{border-left-color:var(--icu)} .c-nf{border-left-color:var(--nf)} .c-jep,.c-oph,.c-vac{border-left-color:var(--light)} .c-x{border-left-color:var(--fixed)}
+/* call strip */
+.days{display:flex;gap:1px;flex-wrap:nowrap}
+.days span{width:13px;height:16px;font-family:var(--mono);font-size:10px;line-height:16px;text-align:center;border-radius:2px;background:var(--bg);color:var(--muted)}
+.days span.L{background:var(--ink);color:var(--panel)}
+.days span.M{background:var(--muted);color:var(--panel)}
+.days span.we{box-shadow:0 0 0 1.5px var(--accent)}
+.wk{display:flex;gap:4px;flex-wrap:wrap}
+.chip{font-size:11px;padding:1px 6px;border-radius:4px;white-space:nowrap;font-weight:500}
+.chip.golden{background:var(--gold);color:var(--gold-ink)}
+.chip.silver{background:var(--silver);color:var(--silver-ink)}
+.chip.black{background:var(--black);color:var(--black-ink)}
+.chip.works{border:1px solid var(--line);color:var(--muted)}
+/* controls */
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+details summary{cursor:pointer;font-weight:500}
+.prefs{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px 16px;margin-top:10px}
+.prefs label{justify-content:space-between}
+/* trade cards */
+.cards{display:flex;flex-direction:column;gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.card .head{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.card .who{font-weight:600;font-size:16px}
+.card .meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.verdict{font-size:12px;padding:2px 8px;border-radius:10px;font-weight:500;border:1px solid currentColor}
+.verdict.pos{color:var(--good)} .verdict.neg{color:var(--bad)} .verdict.even{color:var(--muted)}
+.rows{display:grid;grid-template-columns:1fr;gap:8px}
+.trow{display:grid;grid-template-columns:110px 1fr 1fr;gap:10px;align-items:start;border-top:1px dashed var(--line);padding-top:8px}
+.trow .when{font-size:13px;color:var(--muted)}
+.trow .when b{color:var(--ink);font-family:var(--mono)}
+.side{display:flex;flex-direction:column;gap:4px;min-width:0}
+.side .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.move{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.slot{display:flex;flex-direction:column;gap:3px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;border-left-width:4px;min-width:0}
+.slot .code{font-family:var(--mono);font-weight:500}
+.slot.old{opacity:.6}
+.arrow{color:var(--muted)}
+.note{font-size:12px;color:var(--muted)}
+.warn{background:var(--warn-bg);color:var(--warn-ink);border-radius:6px;padding:6px 10px;font-size:13px}
+.empty{color:var(--muted);padding:14px;border:1px dashed var(--line);border-radius:8px}
+/* plan */
+.plan-item{display:flex;justify-content:space-between;gap:10px;align-items:center;border-top:1px dashed var(--line);padding:8px 0}
+/* grid */
+.gridwrap{overflow-x:auto}
+table{border-collapse:collapse;font-size:12px;width:100%}
+th,td{border:1px solid var(--line);padding:3px 5px;white-space:nowrap;text-align:left}
+th{background:var(--bg);font-weight:500;position:sticky;top:0}
+td.name{position:sticky;left:0;background:var(--panel);font-weight:500}
+td .g{font-family:var(--mono)}
+td.t-va .g{color:var(--va)} td.t-hell .g{color:var(--hell)} td.t-uhgm .g,td.t-uhsub .g{color:var(--uh)} td.t-rat .g{color:var(--hell)} td.t-vamic .g{color:var(--icu)}
+td.t-icu .g{color:var(--icu)} td.t-nf .g{color:var(--nf)} td.t-jep .g,td.t-oph .g,td.t-vac .g{color:var(--light)} td.t-x .g{color:var(--fixed)}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:4px;vertical-align:middle}
+.dot.gd{background:var(--gold)} .dot.bd{background:var(--black);box-shadow:0 0 0 1px var(--line)}
+tr.merow td{background:var(--accent-soft)}
+.legend{display:flex;flex-wrap:wrap;gap:10px 16px;font-size:12px;color:var(--muted);margin-top:8px}
+@media (max-width:640px){.trow{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Intern Swap Board</h1>
+  <p class="sub">Pick the block you want out of. The board lists every intern you could trade with, what you would hand over in return, and how the weekends change for both of you. Schedules were read from Amion on Nov 25, 2026. Check Amion again before you ask anyone.</p>
+</header>
+
+<section class="panel">
+  <h2>Your schedule</h2>
+  <div class="strip" id="strip"></div>
+  <div class="legend">
+    <span><span class="chip golden">Golden</span> both days off</span>
+    <span><span class="chip silver">Silver</span> one day off</span>
+    <span><span class="chip black">Black</span> long or medium both days</span>
+    <span>Day letters: L long, M medium, S short, H happy. Outlined cells are Sat and Sun.</span>
+  </div>
+  <div id="planbox"></div>
+</section>
+
+<section>
+  <h2 id="tradehead">Trades</h2>
+  <div class="panel" style="margin-bottom:10px">
+    <div class="controls">
+      <label><input type="checkbox" id="f-fair" checked> Other person is not worse off</label>
+      <label><input type="checkbox" id="f-better" checked> My block gets better</label>
+      <label><input type="checkbox" id="f-nights" checked> Never give me nights or UH ICU</label>
+      <label><input type="checkbox" id="f-vac" checked> Leave vacations alone</label>
+      <label><input type="checkbox" id="f-oneway" checked> Show one-block asks</label>
+      <label>Who <select id="f-who"><option value="all">Everyone</option><option value="prelim">Prelims only</option><option value="cat">Categoricals only</option></select></label>
+      <label>Name <input type="text" id="f-name" placeholder="filter" size="10"></label>
+      <label>Sort <select id="f-sort"><option value="sel">Best for this block</option><option value="me">Best for me overall</option><option value="them">Best for them</option></select></label>
+    </div>
+    <details style="margin-top:10px">
+      <summary>How good is each rotation? Change these to match how you feel</summary>
+      <p class="note" style="margin-top:6px">Higher is better. The board assumes other interns feel the same way, which is a guess. The one exception is VA MICU, which has its own score for how others see it. The Ramadan multiplier only counts for you, in the 2/8 and 2/22 blocks.</p>
+      <div class="prefs" id="prefs"></div>
+    </details>
+  </div>
+  <div class="cards" id="cards"></div>
+</section>
+
+<section class="panel">
+  <h2>Everyone's remaining blocks</h2>
+  <div class="gridwrap"><table id="grid"></table></div>
+  <div class="legend">
+    <span><span class="dot gd"></span> good weekends (3 weekend days off)</span>
+    <span><span class="dot bd"></span> has a black weekend</span>
+    <span>Grey rotations (clinic, PDB, consults, electives) cannot be traded with you.</span>
+  </div>
+</section>
+</main>
+
+<script>
+const D = {"blocks":[{"id":"7B","start":"2026-12-28","days":14},{"id":"8A","start":"2027-01-11","days":14},{"id":"8B","start":"2027-01-25","days":14},{"id":"9A","start":"2027-02-08","days":14},{"id":"9B","start":"2027-02-22","days":14},{"id":"10A","start":"2027-03-08","days":14},{"id":"10B","start":"2027-03-22","days":14},{"id":"11A","start":"2027-04-05","days":14},{"id":"11B","start":"2027-04-19","days":14},{"id":"12A","start":"2027-05-03","days":14},{"id":"12B","start":"2027-05-17","days":14},{"id":"13A","start":"2027-05-31","days":14},{"id":"13B","start":"2027-06-14","days":10}],"people":[{"key":"Ahn","name":"Lucie Ahn","role":"prelim","rot":["Dwork-I","Jep-I","Rat-II","VaG-I","Cherniak-II","Jep-I","Elect","Elect","Elect","Carp-II","Cherniak-II","UHNF-I","Vac"]},{"key":"ME","name":"You","role":"me","rot":["Vac","VAMIC-I","Hell-I","VaG-II","OphElect","VaG-I","OphElect","Jep-I","Hell-I","Wearn-II","Vac","Wright-I","OphElect"]},{"key":"Arline","name":"Andrea Arline","role":"oph","rot":["Vac","Carp-II","OphElect","VAMIC-I","UHNF-I","Vac","OphElect","VAMIC-I","OphElect","Dwork-I","Hell-I","Cherniak-I","OphElect"]},{"key":"Baillargeon","name":"Sophie Baillargeon","role":"oph","rot":["Cherniak-II","VaW-II","OphElect","VAMIC-I","Hell-I","Vac","Dwork-II","VaB-II","Jep-I","Carp-I","Rat-II","VaB-I","OphElect"]},{"key":"Ho","name":"Bing Ho","role":"oph","rot":["Weis-I","Vac","Vac","OphElect","VAMIC-I","UHNF-I","VAMIC-I","Dwork-I","VaW-II","OphElect","VAMIC-I","Wearn-II","OphElect"]},{"key":"Nwosu","name":"Ikenna Nwosu","role":"oph","rot":["Wright-II","Rat-II","Jep-I","OphElect","UHNF-I","VAMIC-I","Vac","VaO-I","Rat-II","Wearn-I","OphElect","Jep-I","OphElect"]},{"key":"Yazji","name":"Isabella Yazji","role":"oph","rot":["VaG-II","VAMIC-I","Weis-I","Vac","VaG-II","Wearn-I","Jep-I","VaW-II","VaO-II","Cherniak-II","Jep-I","Vac","OphElect"]},{"key":"Atobiloye","name":"Mariam Atobiloye","role":"prelim","rot":["VaB-II","Elect","VAMIC-I","Weis-II","VANF-I","Carp-II","Elect","Weis-I","VaO-I","VaW-II","Vac","Dwork-I","UHNF-I"]},{"key":"Montgomery","name":"Brock Montgomery","role":"prelim","rot":["VANF-I","Elect","Cherniak-II","VaB-I","Wearn-II","Elect","Vac","VAMIC-I","Jep-I","Hell-I","Carp-I","VaO-I","Elect"]},{"key":"Moody","name":"Will Moody","role":"prelim","rot":["VaO-II","Jep-I","Jep-I","Vac","VaO-II","Elect","VAMIC-I","VaO-II","Carp-I","Wright-II","Jep-I","Carp-I","Elect"]},{"key":"Regan","name":"Matthew Regan","role":"prelim","rot":["Wearn-II","VaG-I","Hell-I","Cherniak-I","Elect","Weis-II","UHNF-I","Vac","VAMIC-I","Rat-II","VaB-II","Jep-I","VAMIC-I"]},{"key":"Ross","name":"Julia Ross","role":"prelim","rot":["VaW-I","VAMIC-I","Jep-I","VaB-II","Elect","VaG-II","Elect","Wright-II","Weis-I","VaB-I","Elect","Vac","VAMIC-I"]},{"key":"Aba Numai","name":"Abdulmalik Aba Numai","role":"cat","rot":["Naff-I","TT-I","UHMIC-I","PDB","Vac","VAMIC-I","VaO-I","Amb-I","Wright-II","Hell-I","UHNF-I","Amb-I","UHMIC-I"]},{"key":"Acheampong","name":"Irene Acheampong","role":"cat","rot":["UHNF-I","Vac","UHCIC-I","Carp-I","VaB-II","PDB","Eckel","COE","COE","COE","COE","COE","COE"]},{"key":"Ahmed Lina","name":"Lina Ahmed","role":"cat","rot":["Hell-I","Vac","Amb-I","VaW-I","Rat-II","PDB","Vac","Elect","UHNF-I","Weis-I","Amb-I","UHMIC-I","VaW-II"]},{"key":"Alquhidan","name":"Mohamed Alquhidan","role":"cat","rot":["Amb-I","Hell-I","TT-I","Dwork-II","Amb-I","Vac","Hell-I","Wearn-I","PDB","UHMIC-I","VANF-I","VaW-II","Amb-I"]},{"key":"Bajer","name":"Aleksandra Bajer","role":"cat","rot":["Amb-I","Elect","Wearn-II","Weis-I","Amb-I","PDB","Amb-I","UHNF-I","Vac","Naff-I","VaW-II","Eckel","Amb-I"]},{"key":"Baskar","name":"Viknesh Baskar","role":"cat","rot":["Vac","Dwork-II","VaO-I","PDB","UHMIC-I","Cherniak-I","UHNF-I","Amb-I","Dwork-I","Hell-I","Vac","Amb-I","Wearn-I"]},{"key":"Bon","name":"Sarah Bon","role":"cat","rot":["UHMIC-I","Amb-I","Naff-II","UHMIC-I","Eckel","VaW-II","Dwork-I","VAMIC-I","PDB","Amb-I","Vac","Cherniak-II","UHMIC-I"]},{"key":"Botaka","name":"Noela Botaka","role":"cat","rot":["UHMIC-I","Amb-I","Eckel","Rat-I","Hell-I","PDB","Elect","Naff-I","Hell-I","Amb-I","Vac","Elect","UHMIC-I"]},{"key":"Braunrot","name":"Alexis Braunrot","role":"cat","rot":["UHMIC-I","COE","COE","COE","COE","COE","COE","Dwork-II","PDB","VaW-I","Dwork-II","VAMIC-I","VaG-I"]},{"key":"Brooks","name":"Raimel Brooks","role":"cat","rot":["UHCIC-I","Amb-I","Wright-II","Rat-II","Elect","UHNF-I","Vac","Rat-II","PDB","Amb-I","Wright-I","Eckel","UHMIC-I"]},{"key":"Buddhavarapu","name":"Sravani Buddhavarapu","role":"cat","rot":["UHNF-I","Amb-I","Elect","VANF-I","Vac","Amb-I","Weis-II","LME","PDB","Amb-I","Wearn-II","Rat-II","Hell-I"]},{"key":"Chakraborti","name":"Korak Chakraborti","role":"cat","rot":["VaW-II","Eckel","Amb-I","UHMIC-I","Carp-I","UHNF-I","Vac","Elect","PDB","VAMIC-I","Amb-I","Hell-I","Carp-I"]},{"key":"Coleman","name":"Ashley Coleman","role":"cat","rot":["Geri","Weis-II","UHNF-I","PDB","Vac","UHCIC-I","Hell-I","Amb-I","Cherniak-I","UHMIC-I","Elect","Amb-I","VaO-II"]},{"key":"Fanous","name":"Kareem Fanous","role":"cat","rot":["Vac","UHCIC-I","Amb-I","Hell-I","VAMIC-I","Geri","VANF-I","Vac","PDB","Dwork-II","Amb-I","Hell-I","Elect"]},{"key":"Folk","name":"Sara Folk","role":"cat","rot":["Amb-I","Wright-II","Cherniak-I","UHCIC-I","Amb-I","UHMIC-I","Weis-I","Vac","PDB","VaG-II","Geri","VANF-I","Amb-I"]},{"key":"Garcia-Colon","name":"Carlos Garcia-Colon","role":"cat","rot":["Amb-I","UHMIC-I","VaB-II","PDB","Amb-I","Vac","UHMIC-I","Hell-I","Amb-I","Elect","UHMIC-I","Rat-I","Amb-I"]},{"key":"Ghanatios","name":"George Ghanatios","role":"cat","rot":["Carp-I","Vac","Amb-I","PDB","Geri","Vac","UHCIC-I","LME","UHMIC-I","Eckel","Amb-I","Wearn-I","Hell-I"]},{"key":"Gottschall","name":"Zachary Gottschall","role":"cat","rot":["Wright-I","Amb-I","Geri","Elect","VAMIC-I","PDB","Vac","Cherniak-I","Dwork-II","Amb-I","VaB-I","UHMIC-I","Rat-II"]},{"key":"Grencewicz","name":"Dennis Grencewicz","role":"cat","rot":["TT-I","Cherniak-I","Amb-I","PDB","Carp-II","VANF-I","Elect","Vac","Geri","Cherniak-I","Amb-I","UHMIC-I","Naff-II"]},{"key":"Jennings","name":"Katherine Jennings","role":"cat","rot":["Vac","Hell-I","VAMIC-I","Vac","UHMIC-I","PDB","VaO-II","COE","COE","COE","COE","COE","COE"]},{"key":"Karavidha","name":"Klevis Karavidha","role":"cat","rot":["Amb-I","VANF-I","Vac","VAMIC-I","Amb-I","Hell-I","Rat-II","UHCIC-I","PDB","Weis-II","Eckel","Hell-I","Amb-I"]},{"key":"Kasera","name":"Shalini Kasera","role":"cat","rot":["Rat-I","Carp-I","Amb-I","Hell-I","Dwork-II","VaO-I","Vac","VaW-I","PDB","UHMIC-I","Amb-I","Elect","Geri"]},{"key":"Kashyap","name":"Anjali Kashyap","role":"cat","rot":["Geri","VaW-I","Amb-I","Hell-I","Cherniak-I","PDB","Hell-I","UHNF-I","Vac","UHMIC-I","Amb-I","Elect","Wright-II"]},{"key":"Kfoury","name":"Peter Kfoury","role":"cat","rot":["UHMIC-I","Eckel","Vac","PDB","Naff-I","VaB-I","UHNF-I","COE","COE","COE","COE","COE","COE"]},{"key":"Kreider","name":"Loren Kreider","role":"cat","rot":["Naff-II","Amb-I","Geri","UHMIC-I","Weis-I","PDB","Wearn-II","Vac","VANF-I","Amb-I","Dwork-I","Elect","Wearn-II"]},{"key":"Maftah","name":"Abdallah Maftah","role":"cat","rot":["Amb-I","Vac","VaB-I","Dwork-I","Amb-I","Vac","VaG-I","UHMIC-I","PDB","VaB-II","UHNF-I","UHMIC-I","Amb-I"]},{"key":"Moradiya","name":"Pujan Moradiya","role":"cat","rot":["Cherniak-I","VaB-I","UHMIC-I","PDB","Weis-II","Hell-I","Wright-II","Amb-I","UHNF-I","Vac","UHMIC-I","Amb-I","Rat-I"]},{"key":"Mukherjee","name":"Rishav Mukherjee","role":"cat","rot":["Rat-II","Amb-I","Elect","VaW-II","TT-I","PDB","UHMIC-I","Carp-II","Vac","Amb-I","Weis-II","UHCIC-I","Eckel"]},{"key":"Ogunneye","name":"Qausarat Ogunneye","role":"cat","rot":["VAMIC-I","Eckel","UHMIC-I","PDB","Hell-I","Dwork-I","Geri","Amb-I","Vac","VAMIC-I","Cherniak-I","Amb-I","Weis-I"]},{"key":"Ohagi","name":"Stephanie Ohagi","role":"cat","rot":["Eckel","Amb-I","VAMIC-I","PDB","Vac","VaW-I","Naff-II","Vac","Hell-I","Amb-I","VaW-I","UHMIC-I","UHNF-I"]},{"key":"Omer","name":"Mohamed Omer","role":"cat","rot":["Elect","VaB-II","Dwork-II","UHNF-I","Vac","UHMIC-I","Eckel","Amb-I","PDB","VANF-I","Vac","Amb-I","TT-I"]},{"key":"Osman","name":"Ilham Osman","role":"cat","rot":["Dwork-II","Rat-I","Amb-I","UHMIC-I","Vac","Carp-I","VaB-II","UHNF-I","PDB","Elect","Amb-I","Naff-II","Hell-I"]},{"key":"Owusu","name":"Nana Owusu","role":"cat","rot":["Hell-I","Amb-I","VaW-I","Vac","Wright-II","PDB","Cherniak-II","UHMIC-I","VaB-II","Amb-I","UHNF-I","Elect","Geri"]},{"key":"Ozcelik","name":"Cosku Ozcelik","role":"cat","rot":["Elect","VaG-II","Amb-I","PDB","UHCIC-I","Hell-I","Wearn-I","LME","UHNF-I","Vac","Amb-I","VaG-II","Carp-II"]},{"key":"Patel","name":"Shrey Patel","role":"cat","rot":["Eckel","Wearn-II","Hell-I","Amb-I","UHMIC-I","PDB","Hell-I","Amb-I","Vac","Geri","Carp-II","Amb-I","VaW-I"]},{"key":"Presutti","name":"Laura Presutti","role":"cat","rot":["VaB-I","COE","COE","COE","COE","COE","COE","Vac","PDB","VAMIC-I","Hell-I","Weis-I","UHMIC-I"]},{"key":"Pritsky","name":"Nikol Pritsky","role":"cat","rot":["Vac","COE","COE","COE","COE","COE","COE","Elect","PDB","Wright-I","UHMIC-I","UHNF-I","Dwork-I"]},{"key":"Radwan","name":"Eman Radwan","role":"cat","rot":["Weis-II","Amb-I","Carp-II","UHNF-I","Elect","PDB","VaW-II","LME","UHCIC-I","Amb-I","Hell-I","Dwork-II","VaG-II"]},{"key":"Reasoner","name":"Seth Reasoner","role":"cat","rot":["Amb-I","VaO-II","UHMIC-I","PDB","Amb-I","Dwork-II","Vac","Hell-I","Elect","VaO-II","UHMIC-I","UHNF-I","Amb-I"]},{"key":"Saroya","name":"Ghazi-Abdullah Saroya","role":"cat","rot":["UHMIC-I","Amb-I","Weis-II","UHNF-I","Vac","VAMIC-I","TT-I","Elect","PDB","Amb-I","Naff-I","Geri","Dwork-II"]},{"key":"Sodhi","name":"Simrat Sodhi","role":"cat","rot":["Elect","Vac","VaO-II","PDB","Naff-II","Weis-I","Cherniak-I","Amb-I","UHMIC-I","Eckel","UHCIC-I","Amb-I","Hell-I"]},{"key":"Sypniewski","name":"Jacob Sypniewski","role":"cat","rot":["Amb-I","UHNF-I","Elect","Vac","Amb-I","Naff-II","VaG-II","UHMIC-I","PDB","UHCIC-I","VaG-II","Vac","Amb-I"]},{"key":"Vemulapalli","name":"Sophia Vemulapalli","role":"cat","rot":["UHNF-I","Elect","Rat-I","PDB","Dwork-I","Rat-II","VaW-I","Amb-I","UHMIC-I","Vac","Eckel","Amb-I","UHCIC-I"]},{"key":"Ware","name":"Gardenier Ware","role":"cat","rot":["Vac","UHMIC-I","Amb-I","Hell-I","UHMIC-I","PDB","Eckel","Wearn-II","UHMIC-I","Naff-II","Amb-I","VaG-I","Weis-II"]},{"key":"Yahyavi","name":"Seyed Ashkan Yahyavi","role":"cat","rot":["VaG-I","Geri","VaW-II","PDB","Rat-I","UHMIC-I","Vac","Amb-I","Hell-I","Eckel","UHMIC-I","Amb-I","UHNF-I"]}],"hell":{"0|Owusu":"A","0|Ahmed Lina":"C","1|Alquhidan":"A","1|Jennings":"C","2|ME":"A","2|Patel":"B","2|Regan":"C","3|Kashyap":"A","3|Fanous":"B","3|Kasera":"C","3|Ware":"D","4|Baillargeon":"A","4|Ogunneye":"B","4|Botaka":"D","5|Karavidha":"A","5|Moradiya":"B","5|Ozcelik":"C","6|Alquhidan":"A","6|Coleman":"B","6|Kashyap":"C","6|Patel":"D","7|Garcia-Colon":"B","7|Reasoner":"C","8|ME":"A","8|Botaka":"B","8|Ohagi":"C","8|Yahyavi":"D","9|Aba Numai":"A","9|Baskar":"B","9|Montgomery":"D","10|Arline":"A","10|Presutti":"B","10|Radwan":"C","11|Chakraborti":"A","11|Karavidha":"B","11|Fanous":"C","12|Buddhavarapu":"A","12|Ghanatios":"B","12|Osman":"C","12|Sodhi":"D"}};
+const WARD = {Carp:['A','C'],Dwork:['D','B'],Cherniak:['B','D'],Naff:['C','A'],Wearn:['B','D'],Wright:['C','A'],Rat:['D','B'],Weis:['A','C'],VaB:['C','A'],VaW:['A','C'],VaG:['D','B'],VaO:['B','D']};
+const FLIP = {A:'C',C:'A',B:'D',D:'B'};
+const FULL = {Carp:'Carpenter (ID)',Dwork:'Dworken (GI)',Cherniak:'Cherniak (pulm)',Naff:'Naff (gen med)',Wearn:'Wearn (gen med)',Wright:'Wright (gen med)',Rat:'Ratnoff (heme/onc)',Weis:'Weisman (onc)',VaB:'VA Blue',VaW:'VA White',VaG:'VA Green',VaO:'VA Orange',Hell:'Hellerstein (cards)',UHMIC:'UH MICU',VAMIC:'VA MICU',UHCIC:'UH CICU',UHNF:'UH nights',VANF:'VA nights',Jep:'Jeopardy',Vac:'Vacation',OphElect:'Ophtho elective'};
+const CATS = [['vac','Vacation',10],['oph','Ophtho elective',9],['jep','Jeopardy',8],['uhgm','UH general medicine',4.25],['uhsub','UH subspecialty wards (not Ratnoff)',4.25],['vamic','VA MICU',3.5],['rat','Ratnoff',2.5],['va','VA wards',2.25],['hell','Hellerstein',2],['nf','Night float',1.5],['icu','UH MICU and CICU',1]];
+const EXTRA = [['wkOff','Each weekend day off (on wards)',0.25],['black','Penalty per black weekend',0.5],['ram','Ramadan multiplier (for you)',2],['vamicThem','VA MICU as other interns see it',1.5]];
+const RAM = {3:'Ramadan',4:'Ramadan',5:'Ramadan ends about 3/9'};
+let pref = {}; CATS.concat(EXTRA).forEach(c=>pref[c[0]]=c[2]);
+let plan = [];
+let sel = 3;
+let shown = 40;
+try{const s=JSON.parse(localStorage.getItem('swapboard')||'null'); if(s){Object.assign(pref,s.pref||{}); plan=s.plan||[];}}catch(e){}
+function save(){try{localStorage.setItem('swapboard',JSON.stringify({pref,plan}));}catch(e){}}
+
+const ME = D.people.find(p=>p.role==='me');
+const OTHERS = D.people.filter(p=>p.role!=='me');
+const byKey = {}; D.people.forEach(p=>byKey[p.key]=p);
+const TODAY = new Date(); TODAY.setHours(0,0,0,0);
+function d0(i){const [y,m,d]=D.blocks[i].start.split('-').map(Number);return new Date(y,m-1,d);}
+function addDays(dt,n){const x=new Date(dt);x.setDate(x.getDate()+n);return x;}
+function md(dt){return (dt.getMonth()+1)+'/'+dt.getDate();}
+function range(i){return md(d0(i))+'–'+md(addDays(d0(i),D.blocks[i].days-1));}
+function deadline(i){return addDays(d0(i),-28);}
+function locked(i){return deadline(i)<TODAY;}
+
+function catOf(base){
+  if(/^Va[BGOW]$/.test(base))return 'va';
+  if(['Wearn','Wright','Naff'].includes(base))return 'uhgm';
+  if(base==='Rat')return 'rat';
+  if(['Weis','Dwork','Carp','Cherniak'].includes(base))return 'uhsub';
+  if(base==='Hell')return 'hell';
+  if(base==='VAMIC')return 'vamic';
+  if(['UHMIC','UHCIC'].includes(base))return 'icu';
+  if(['UHNF','VANF'].includes(base))return 'nf';
+  if(base==='Jep')return 'jep'; if(base==='Vac')return 'vac'; if(base==='OphElect')return 'oph';
+  return 'x';
+}
+function slotOf(p,i){
+  const code=p.rot[i]; const m=code.match(/^(.*?)-(I|II)$/); const base=m?m[1]:code, pos=m?m[2]:'';
+  let phase=null;
+  if(WARD[base]){const ph=WARD[base][pos==='I'?0:1]; phase=D.blocks[i].id.endsWith('A')?ph:FLIP[ph];}
+  else if(base==='Hell'){phase=D.hell[i+'|'+p.key]||null;}
+  return {code,base,pos,cat:catOf(base),phase,owner:p.key};
+}
+function days(slot,i){
+  if(!slot.phase)return null; const o='ABCD'.indexOf(slot.phase), n=D.blocks[i].days, out=[];
+  for(let d=0;d<n;d++)out.push('LMSH'[((d-o)%4+4)%4]); return out;
+}
+function wkinfo(slot,i){
+  if(slot.cat==='jep'||slot.cat==='oph'){const w=[];for(const s of [5,12]){if(s+1<D.blocks[i].days)w.push({kind:'golden',a:'',b:'',sat:addDays(d0(i),s)});}return {ds:null,w,offDays:w.length*2,blacks:0,longs:0};}
+  const ds=days(slot,i); if(!ds)return null;
+  const off=l=>slot.cat==='hell'?l==='H':(l==='S'||l==='H');
+  const w=[]; let offDays=0,blacks=0;
+  for(const s of [5,12]){ if(s+1>=ds.length)continue; const a=ds[s],b=ds[s+1]; const n=(off(a)?1:0)+(off(b)?1:0); offDays+=n;
+    let kind=n===2?'golden':n===1?'silver':(('LM'.includes(a)&&'LM'.includes(b))?'black':'works'); if(kind==='black')blacks++;
+    w.push({kind,a,b,sat:addDays(d0(i),s)}); }
+  return {ds,w,offDays,blacks,longs:ds.filter(x=>x==='L').length};
+}
+function score(slot,i,forMe){
+  let v=pref[slot.cat]; if(v===undefined)return null; v=+v;
+  if(slot.cat==='vamic'&&!forMe)v=+pref.vamicThem;
+  const k=wkinfo(slot,i); if(k&&k.ds){v+= pref.wkOff*k.offDays - pref.black*k.blacks;}
+  if(forMe && (i===3||i===4)) v*=pref.ram;
+  return v;
+}
+const TRADE=['va','uhgm','uhsub','rat','hell','vamic','icu','nf','jep','vac'];
+function canDo(slot,taker,giver){ // can `taker` do a slot owned by `giver`
+  if(TRADE.includes(slot.cat))return true;
+  if(slot.cat==='oph')return (taker.role==='oph'||taker.role==='me')&&(giver.role==='oph'||giver.role==='me');
+  return false;
+}
+// my schedule with plan applied
+function mySlots(){
+  const s=D.blocks.map((b,i)=>slotOf(ME,i));
+  for(const t of plan){ for(const i of t.blocks){ s[i]=Object.assign(slotOf(byKey[t.who],i),{from:t.who}); } }
+  return s;
+}
+function usedBlocks(){const u=new Set();plan.forEach(t=>t.blocks.forEach(i=>u.add(i)));return u;}
+
+function daysHTML(slot,i){
+  const k=wkinfo(slot,i); if(!k)return '';
+  const cells=!k.ds?'':k.ds.map((l,d)=>'<span class="'+(l==='H'?'':l)+((d%7===5||d%7===6)?' we':'')+'">'+l+'</span>').join('');
+  const chips=k.w.map(w=>'<span class="chip '+w.kind+'">'+md(w.sat)+' '+({golden:'Golden',silver:'Silver',black:'Black',works:'Works both'}[w.kind])+' <span class="mono">'+w.a+w.b+'</span></span>').join('');
+  return (cells?'<div class="days" aria-label="daily call pattern">'+cells+'</div>':'')+'<div class="wk">'+chips+'</div>';
+}
+function slotHTML(slot,i,cls){
+  const none={vac:'Off',vamic:'Call every third day',icu:'ICU call schedule',nf:'Nights'}[slot.cat]||'';
+  return '<div class="slot c-'+slot.cat+' '+(cls||'')+'"><span class="code">'+slot.code+'</span><span class="note">'+(FULL[slot.base]||slot.base)+'</span>'+(daysHTML(slot,i)||('<span class="note">'+none+'</span>'))+'</div>';
+}
+
+function renderStrip(){
+  const cur=mySlots(), orig=D.blocks.map((b,i)=>slotOf(ME,i));
+  document.getElementById('strip').innerHTML=D.blocks.map((b,i)=>{
+    const s=cur[i], ch=s.owner!=='ME';
+    return '<button class="blk c-'+s.cat+(i===sel?' sel':'')+(locked(i)?' locked':'')+'" data-blk="'+i+'" aria-pressed="'+(i===sel)+'">'
+      +'<span class="top"><span><b class="mono">'+b.id+'</b> '+range(i)+'</span></span>'
+      +'<span class="rot">'+s.code+'</span>'
+      +(ch?'<span class="was">'+orig[i].code+'</span>':'')
+      +daysHTML(s,i)
+      +'<span class="wk">'+(RAM[i]?'<span class="tag ram">'+RAM[i]+'</span>':'')+(ch?'<span class="tag chg">from '+byKey[s.owner].name.split(' ').slice(-1)[0]+'</span>':'')+(locked(i)?'<span class="tag">locked</span>':'')+'</span>'
+      +'</button>';}).join('');
+  renderPlan(cur);
+}
+function renderPlan(cur){
+  const box=document.getElementById('planbox'); if(!plan.length){box.innerHTML='';return;}
+  let run=2,maxRun=2; // Wearn and VA nights come right before 7B
+  cur.forEach(s=>{ if(['va','uhgm','uhsub','rat','hell','vamic','icu','nf'].includes(s.cat)){run++;maxRun=Math.max(maxRun,run);}else run=0; });
+  const items=plan.map((t,n)=>'<div class="plan-item"><span><b>'+byKey[t.who].name+'</b>: '+t.blocks.map(i=>D.blocks[i].id+' '+range(i)+' you do <span class="mono">'+slotOf(byKey[t.who],i).code+'</span>, they do <span class="mono">'+ME.rot[i]+'</span>').join('; ')+'. Arrange by '+md(deadline(Math.min(...t.blocks)))+'.</span><button data-rm="'+n+'">Remove</button></div>').join('');
+  box.innerHTML='<h2 style="margin-top:16px">Your plan</h2>'+items
+    +(maxRun>=5?'<p class="warn" style="margin-top:8px">This plan gives you '+maxRun+' inpatient half-blocks in a row ('+(maxRun*2)+' weeks). The chiefs asked to be told about long ward stretches.</p>':'')
+    +'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button id="copyplan">Copy plan as text</button><button id="clearplan">Clear plan</button><span class="note" id="copymsg"></span></div>';
+}
+function planText(){
+  return plan.map(t=>'Swap with '+byKey[t.who].name+': '+t.blocks.map(i=>D.blocks[i].id+' ('+range(i)+'): I take '+slotOf(byKey[t.who],i).code+', they take '+ME.rot[i]).join('; ')+'. Arrange by '+md(deadline(Math.min(...t.blocks)))+'.').join('\n');
+}
+
+function findTrades(){
+  const f=id=>document.getElementById(id);
+  const fair=f('f-fair').checked, better=f('f-better').checked, noN=f('f-nights').checked, noV=f('f-vac').checked, oneway=f('f-oneway').checked;
+  const who=f('f-who').value, nm=f('f-name').value.trim().toLowerCase(), sort=f('f-sort').value;
+  const used=usedBlocks(); const out=[];
+  const mine=slotOf(ME,sel), mv=score(mine,sel,true), mvp=score(mine,sel,false);
+  for(const p of OTHERS){
+    if(who==='prelim'&&p.role==='cat')continue; if(who==='cat'&&p.role!=='cat')continue;
+    if(nm&&!p.name.toLowerCase().includes(nm))continue;
+    const a=slotOf(p,sel); if(a.code===mine.code)continue;
+    if(!canDo(a,ME,p)||!canDo(mine,p,ME))continue;
+    if(noN&&(a.cat==='icu'||a.cat==='nf'))continue;
+    if(noV&&(a.cat==='vac'||mine.cat==='vac'))continue;
+    const av=score(a,sel,true), avp=score(a,sel,false); const selGain=av-mv;
+    if(better&&selGain<=0.001)continue;
+    if(oneway){const their=mvp-avp; if(!fair||their>=-0.3) out.push({p,blocks:[sel],selGain,mine:selGain,their});}
+    for(let t=0;t<D.blocks.length;t++){
+      if(t===sel||locked(t)||used.has(t))continue;
+      const mt=slotOf(ME,t), b=slotOf(p,t);
+      if(b.code===mt.code||(b.cat===mt.cat&&b.phase===mt.phase&&!b.phase))continue;
+      if(!canDo(b,ME,p)||!canDo(mt,p,ME))continue;
+      if(noN&&(b.cat==='icu'||b.cat==='nf'))continue;
+      if(noV&&(b.cat==='vac'||mt.cat==='vac'))continue;
+      const myG=selGain+score(b,t,true)-score(mt,t,true);
+      const their=(mvp-avp)+(score(mt,t,false)-score(b,t,false));
+      if(fair&&their<-0.3)continue;
+      out.push({p,blocks:[sel,t],selGain,mine:myG,their});
+    }
+  }
+  const key={sel:x=>[-x.selGain,-x.mine],me:x=>[-x.mine,-x.selGain],them:x=>[-x.their,-x.selGain]}[sort];
+  out.sort((x,y)=>{const a=key(x),b=key(y);return a[0]-b[0]||a[1]-b[1]||x.blocks.length-y.blocks.length;});
+  return out;
+}
+function verdict(v,them){
+  if(v>0.3)return '<span class="verdict pos">'+(them?'They come out ahead':'You come out ahead')+'</span>';
+  if(v<-0.3)return '<span class="verdict neg">'+(them?'They come out behind':'You pay for this')+'</span>';
+  return '<span class="verdict even">'+(them?'Even for them':'Even for you')+'</span>';
+}
+function renderCards(){
+  const head=document.getElementById('tradehead'), box=document.getElementById('cards');
+  const mine=slotOf(ME,sel);
+  head.textContent='Trades out of '+D.blocks[sel].id+' ('+range(sel)+'), '+mine.code;
+  if(locked(sel)){box.innerHTML='<div class="empty">This block starts in under four weeks, so it can no longer be switched. The chiefs said weekend coverage and jeopardy swaps are more flexible; ask them directly.</div>';return;}
+  if(usedBlocks().has(sel)){box.innerHTML='<div class="empty">This block is already in your plan. Remove that trade above to look at other options.</div>';return;}
+  if(!TRADE.includes(mine.cat)&&mine.cat!=='oph'){box.innerHTML='<div class="empty">This rotation cannot be traded.</div>';return;}
+  const all=findTrades();
+  if(!all.length){box.innerHTML='<div class="empty">No trades match. Untick a filter above, or turn on one-block asks.</div>';return;}
+  const html=all.slice(0,shown).map((t,n)=>{
+    const p=t.p; const role={oph:'Ophtho prelim',prelim:'Prelim',cat:'Categorical'}[p.role];
+    const notes=[];
+    const takesJep=t.blocks.some(i=>slotOf(ME,i).cat==='jep'), givesJep=t.blocks.some(i=>slotOf(p,i).cat==='jep');
+    if(p.role==='cat'&&(takesJep||givesJep))notes.push('Categorical intern and a jeopardy block: the chiefs may say no because it changes their ward count.');
+    if(t.blocks.some(i=>slotOf(p,i).base===slotOf(ME,i).base))notes.push('Same team, you only switch the I and II call slots.');
+    if(t.blocks.length===1)notes.push('One-block ask. They get nothing back.');
+    const rows=t.blocks.map(i=>{
+      const m=slotOf(ME,i), a=slotOf(p,i);
+      return '<div class="trow"><div class="when"><b>'+D.blocks[i].id+'</b><br>'+range(i)+(RAM[i]?'<br><span class="tag ram">'+RAM[i]+'</span>':'')+'</div>'
+        +'<div class="side"><span class="lbl">You</span><div class="move">'+slotHTML(m,i,'old')+'<span class="arrow">→</span>'+slotHTML(a,i)+'</div></div>'
+        +'<div class="side"><span class="lbl">'+p.name.split(' ')[0]+'</span><div class="move">'+slotHTML(a,i,'old')+'<span class="arrow">→</span>'+slotHTML(m,i)+'</div></div></div>';
+    }).join('');
+    return '<article class="card"><div class="head"><div class="meta"><span class="who">'+p.name+'</span><span class="tag">'+role+'</span></div>'
+      +'<div class="meta">'+verdict(t.mine,false)+verdict(t.their,true)+'<span class="tag">arrange by '+md(deadline(Math.min(...t.blocks)))+'</span>'
+      +'<button class="primary" data-add="'+n+'">Add to plan</button></div></div>'
+      +'<div class="rows">'+rows+'</div>'+(notes.length?'<p class="note">'+notes.join(' ')+'</p>':'')+'</article>';
+  }).join('');
+  box.innerHTML='<p class="note">'+all.length+' possible trades. Showing '+Math.min(shown,all.length)+'.</p>'+html+(all.length>shown?'<button id="more">Show more</button>':'');
+  box._all=all;
+}
+function renderGrid(){
+  const rows=[ME].concat(OTHERS);
+  const head='<tr><th>Intern</th>'+D.blocks.map((b,i)=>'<th>'+b.id+'<br>'+range(i)+'</th>').join('')+'</tr>';
+  const body=rows.map(p=>'<tr class="'+(p.role==='me'?'merow':'')+'"><td class="name">'+p.name+(p.role==='oph'?' (oph)':p.role==='prelim'?' (prelim)':'')+'</td>'+D.blocks.map((b,i)=>{
+    const s=slotOf(p,i), k=wkinfo(s,i); const dot=k?(k.blacks?'<span class="dot bd" title="has a black weekend"></span>':((k.offDays>=3||k.w.every(x=>x.kind==='golden'))?'<span class="dot gd" title="good weekends"></span>':'')):'';
+    return '<td class="t-'+s.cat+'"><span class="g">'+s.code+'</span>'+dot+'</td>';}).join('')+'</tr>').join('');
+  document.getElementById('grid').innerHTML=head+body;
+}
+function renderPrefs(){
+  document.getElementById('prefs').innerHTML=CATS.concat(EXTRA).map(c=>'<label>'+c[1]+' <input type="number" step="0.1" id="p-'+c[0]+'" data-pref="'+c[0]+'" value="'+pref[c[0]]+'"></label>').join('');
+}
+function renderAll(){renderStrip();renderCards();}
+
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-blk]'); if(b){sel=+b.dataset.blk;shown=40;renderAll();document.getElementById('tradehead').scrollIntoView({behavior:'smooth',block:'start'});return;}
+  const a=e.target.closest('[data-add]'); if(a){const t=document.getElementById('cards')._all[+a.dataset.add];plan.push({who:t.p.key,blocks:t.blocks.slice()});save();renderAll();document.getElementById('strip').scrollIntoView({behavior:'smooth',block:'start'});return;}
+  const r=e.target.closest('[data-rm]'); if(r){plan.splice(+r.dataset.rm,1);save();renderAll();return;}
+  if(e.target.id==='more'){shown+=40;renderCards();return;}
+  if(e.target.id==='clearplan'){plan=[];save();renderAll();return;}
+  if(e.target.id==='copyplan'){const msg=document.getElementById('copymsg');try{navigator.clipboard.writeText(planText()).then(()=>{msg.textContent='Copied.';},()=>{msg.textContent=planText();});}catch(err){msg.textContent=planText();}}
+});
+document.addEventListener('input',e=>{
+  if(e.target.dataset&&e.target.dataset.pref){const v=parseFloat(e.target.value);if(!isNaN(v)){pref[e.target.dataset.pref]=v;save();renderCards();}return;}
+  if(e.target.id&&e.target.id.startsWith('f-')){shown=40;renderCards();}
+});
+// drop plan entries that no longer make sense
+plan=plan.filter(t=>byKey[t.who]&&t.blocks.every(i=>i>=0&&i<D.blocks.length));
+if(locked(sel)){const i=D.blocks.findIndex((b,n)=>!locked(n));if(i>=0)sel=i;}
+renderPrefs();renderGrid();renderAll();
+</script>
+</body>
+</html>
